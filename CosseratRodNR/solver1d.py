@@ -87,25 +87,58 @@ def get_theta_from_rotation(rmat):
     :param rmat: rotation matrix
     :return: theta vector
     """
-    theta = np.zeros(3)
+    """
+    **Without Lie group log map**
+    
+    theta1 = np.zeros(3)
     if rmat[2, 0] != 1 or rmat[2, 0] != -1:
-        theta[1] = np.arcsin(rmat[2, 0])
-        theta[0] = np.arctan2(rmat[2, 1] / np.cos(theta[1]), rmat[2, 1] / np.cos(theta[1]))
-        theta[2] = np.arctan2(rmat[1, 0] / np.cos(theta[1]), rmat[1, 0] / np.cos(theta[1]))
+        theta1[1] = np.pi - np.arcsin(rmat[2, 0])
+        theta1[0] = np.arctan2(rmat[2, 1] / np.cos(theta1[1]), rmat[2, 1] / np.cos(theta1[1]))
+        theta1[2] = np.arctan2(rmat[1, 0] / np.cos(theta1[1]), rmat[1, 0] / np.cos(theta1[1]))
     else:
-        theta[2] = 0
+        theta1[2] = 0
         if rmat[2, 0] == -1:
-            theta[1] = np.pi / 2
-            theta[0] = theta[2] + np.arctan2(rmat[0, 1], rmat[0, 2])
+            theta1[1] = np.pi / 2
+            theta1[0] = theta1[2] + np.arctan2(rmat[0, 1], rmat[0, 2])
         else:
-            theta[1] = -np.pi / 2
-            theta[0] = -theta[2] + np.arctan2(-rmat[0, 1], -rmat[0, 2])
-    return theta
+            theta1[1] = -np.pi / 2
+            theta1[0] = -theta1[2] + np.arctan2(-rmat[0, 1], -rmat[0, 2])
+    return theta1
+    """
+    t = np.arccos((np.trace(rmat) - 1) / 2)
+    if np.isclose(t, 0):
+        return np.zeros((3, 3))
+    return t * 0.5 / np.sin(t) * (rmat - rmat.T)
 
 
 def get_axial_tensor(x):
+    """
+    :param x: vector
+    :return: skew symmetric tensor for which x is axial
+    """
     x = np.reshape(x, (3,))
     return np.array([[0, -x[2], x[1]],
                      [x[2], 0, -x[0]],
                      [-x[1], x[0], 0]]
                     )
+
+
+def get_axial_from_skew_symmetric_tensor(x):
+    """
+    x better be skew symmetric tensor
+    :param x: skew symmetric tensor
+    :return: axial vector
+    """
+    return np.array([x[2, 1], x[0, 2], x[1, 0]])
+
+
+def get_rotation_from_theta_tensor(x):
+    """
+    x better be skew symmetric
+    :param x: skew symmetric tensor
+    :return: rotation tensor
+    """
+    t = np.sqrt(0.5 * np.trace(x.T @ x))
+    if np.isclose(t, 0):
+        return np.eye(3)
+    return np.eye(3) + np.sin(t) / t * x + (1 - np.cos(t)) / t ** 2 * (x @ x)
