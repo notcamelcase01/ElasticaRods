@@ -28,7 +28,7 @@ def impose_boundary_condition(k, f, ibc, bc):
     :param f: force vector
     :param ibc: node at with BC is prescribed
     :param bc: boundary condition
-    :return: stiffness matrix and force vector after imposed bc
+    :return: stiffness matrix and force vector after imposing bc
     """
     f = f - (k[:, ibc] * bc)[:, None]
     f[ibc] = bc
