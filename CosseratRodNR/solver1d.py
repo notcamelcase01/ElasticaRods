@@ -47,29 +47,44 @@ def get_displacement_vector(k, f):
     return np.linalg.solve(k, f)
 
 
-def get_lagrange_fn(gp):
+def get_lagrange_fn(gp, element_type=2):
     """
     Linear Lagrange shape functions
+    :param element_type: element type
     :param gp: gauss point
     :return: (L, L')
     """
-    nmat = np.array([.5 * (1 - gp), .5 * (1 + gp)])
-    bmat = np.array([-.5, .5])
-
+    if element_type == 2:
+        nmat = np.array([.5 * (1 - gp), .5 * (1 + gp)])
+        bmat = np.array([-.5, .5])
+    elif element_type == 3:
+        nmat = np.array([0.5 * (-1 + gp) * gp, (-gp + 1) * (gp + 1), 0.5 * gp * (1 + gp)])
+        bmat = np.array([0.5 * (-1 + 2 * gp), -2 * gp, 0.5 * (1 + 2 * gp)])
+    else:
+        raise Exception("Sir, This is Wendy's we don't do more than cubic here !")
     return nmat[:, None], bmat[:, None]
 
 
-def get_connectivity_matrix(n, length):
+def get_connectivity_matrix(n, length, element_type=2):
     """
+    :param element_type: element type
     :param length: length
     :param n: number of 1d elements
     :return: connectivity vector, nodal_data
     """
-    node_data = np.linspace(0, length, n + 1)
-    icon = np.zeros((3, n), dtype=np.int32)
-    icon[0, :] = np.arange(0, n, length)
-    icon[1, :] = icon[0, :]
-    icon[2, :] = icon[1, :] + 1
+    node_data = np.linspace(0, length, (element_type - 1) * n + 1)
+    icon = np.zeros((element_type + 1, n), dtype=np.int32)
+    if element_type == 3:
+        icon[0, :] = np.arange(0, n, length)
+        icon[1, :] = icon[0, :]
+        icon[2, :] = icon[1, :] + 1
+        icon[3, :] = icon[2, :] + 1
+    elif element_type == 2:
+        icon[0, :] = np.arange(0, n, length)
+        icon[1, :] = icon[0, :]
+        icon[2, :] = icon[1, :] + 1
+    else:
+        raise Exception("Sir, This is Wendy's we only do cubic elements here !")
     return icon.T, node_data
 
 
