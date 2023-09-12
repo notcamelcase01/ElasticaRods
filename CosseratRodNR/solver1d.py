@@ -65,7 +65,7 @@ def get_connectivity_matrix(n, length):
     :param n: number of 1d elements
     :return: connectivity vector, nodal_data
     """
-    node_data = np.linspace(0, n, n + 1)
+    node_data = np.linspace(0, length, n + 1)
     icon = np.zeros((3, n), dtype=np.int32)
     icon[0, :] = np.arange(0, n, length)
     icon[1, :] = icon[0, :]
@@ -142,3 +142,38 @@ def get_rotation_from_theta_tensor(x):
     if np.isclose(t, 0):
         return np.eye(3)
     return np.eye(3) + np.sin(t) / t * x + (1 - np.cos(t)) / t ** 2 * (x @ x)
+
+
+def get_assembly_vector(dof, n):
+    """
+    :param dof: dof
+    :param n: nodes
+    :return: assembly points
+    """
+    iv = []
+    for i in n:
+        for j in range(dof):
+            iv.append(dof * i + j)
+    return iv
+
+
+def get_e_operator(n, nx, dof, dr):
+    """
+    :param n: shape function
+    :param nx: derivative of shape function
+    :param dof: dof
+    :param dr: r\' skew symmetric
+    :return: e operator
+    """
+    eop = np.zeros((6, dof * len(n)))
+    for i in range(len(n)):
+        eop[0: 3, i * dof: 3 + i * dof] = n[i][0] * np.eye(3)
+        eop[0: 3, 3 + i * dof: 6 + i * dof] = nx[i][0] * dr
+        eop[3: 6, 3 + i * dof: 6 + i * dof] = n[i][0] * np.eye(3)
+    return eop
+
+
+if __name__ == "__main__":
+    icon_m, i_m = get_connectivity_matrix(10, 1)
+    print(icon_m)
+    print(i_m)
