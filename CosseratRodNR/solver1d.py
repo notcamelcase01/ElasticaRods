@@ -174,6 +174,7 @@ def get_assembly_vector(dof, n):
 
 def get_e_operator(n, nx, dof, dr):
     """
+    returns transpose of e operator
     :param n: shape function
     :param nx: derivative of shape function
     :param dof: dof
@@ -188,7 +189,25 @@ def get_e_operator(n, nx, dof, dr):
     return eop
 
 
+def get_incremental_k(dt, dtds, rot):
+    norm_dt = np.linalg.norm(dt)
+    if np.isclose(norm_dt, 0):
+        return dtds
+    x = np.sin(norm_dt) / norm_dt
+    x2 = np.sin(norm_dt * 0.5) / (norm_dt * 0.5)
+    return rot.T @ (x * dtds + (1 - x) * (dt.T @ dtds) / norm_dt * dt / norm_dt + 0.5 * (x2 ** 2) * np.cross(dt, dtds))
+
+
+def get_pi(rot):
+    pi = np.zeros((6, 6))
+    pi[0: 3, 0: 3] = rot.T
+    pi[3: 6, 3: 6] = rot.T
+    return pi
+
+
 if __name__ == "__main__":
     icon_m, i_m = get_connectivity_matrix(10, 1)
-    print(icon_m)
-    print(i_m)
+    # print(icon_m)
+    # print(i_m)
+    b = get_incremental_k(np.array([1, 1, 1]), np.array([1, 1, 2]), np.eye(3))
+    print(b)
