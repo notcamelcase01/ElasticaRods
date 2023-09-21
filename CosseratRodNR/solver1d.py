@@ -257,8 +257,8 @@ def get_pi(rot):
     :return: pi matrix
     """
     pi = np.zeros((6, 6))
-    pi[0: 3, 0: 3] = rot.T
-    pi[3: 6, 3: 6] = rot.T
+    pi[0: 3, 0: 3] = rot
+    pi[3: 6, 3: 6] = rot
     return pi
 
 

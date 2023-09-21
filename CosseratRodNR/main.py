@@ -6,13 +6,14 @@ import time
 plt.style.use('dark_background')
 np.set_printoptions(linewidth=250)
 
-LOAD_INCREMENTS = 10
 DIMENSIONS = 1
-MAX_ITER = 10
 DOF = 6
-numberOfElements = 50
-L = 1
+LOAD_INCREMENTS = 10
+MAX_ITER = 10
 element_type = 2
+
+L = 1
+numberOfElements = 20
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
@@ -38,7 +39,7 @@ for i in range(numberOfNodes):
     u[6 * i + 1, 0] = 0
     u[6 * i + 2, 0] = node_data[i]
     # Thetas are zero
-fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+fig, ax = plt.subplots(1, 1, figsize=(16, 9))
 r1 = np.zeros(numberOfNodes)
 r2 = np.zeros(numberOfNodes)
 r3 = np.zeros(numberOfNodes)
@@ -49,8 +50,9 @@ for i in range(numberOfNodes):
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
 tik = time.time()
-fapp__ = np.linspace(0, 10, LOAD_INCREMENTS)
+fapp__ = -np.linspace(0, 10.001, LOAD_INCREMENTS)
 for load_iter_ in range(LOAD_INCREMENTS):
+
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         for elm in range(numberOfElements):
@@ -89,8 +91,8 @@ for load_iter_ in range(LOAD_INCREMENTS):
                 pi = sol.get_pi(Rot)
                 n_tensor = sol.get_axial_tensor(gloc[0: 3])
                 m_tensor = sol.get_axial_tensor(gloc[3: 6])
-                floc += E.T @ gloc * np.abs(J) * wgp[xgp]
-                kloc += (E.T @ pi @ Elasticity @ pi.T @ E + sol.get_geometric_tangent_stiffness(E, n_tensor, m_tensor, N_, Nx_, DOF)) * wgp[xgp] * np.abs(J)
+                floc += E.T @ gloc * J * wgp[xgp]
+                kloc += (E.T @ pi @ Elasticity @ pi.T @ E + sol.get_geometric_tangent_stiffness(E, n_tensor, m_tensor, N_, Nx_, DOF)) * wgp[xgp] * J
 
             iv = np.array(sol.get_assembly_vector(DOF, n))
             FG[iv[:, None], 0] += floc
@@ -99,9 +101,12 @@ for load_iter_ in range(LOAD_INCREMENTS):
         for i in range(6):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = sol.get_displacement_vector(KG, FG)
-
-    u += du
-
+    u -= du
+    for i in range(numberOfNodes):
+        r1[i] = u[DOF * i][0]
+        r2[i] = u[DOF * i + 1][0]
+        r3[i] = u[DOF * i + 2][0]
+    ax.plot(r3, r2)
 tok = time.time()
 print("Time lapsed (seconds):", tok - tik)
 
@@ -110,8 +115,7 @@ for i in range(numberOfNodes):
     r2[i] = u[DOF * i + 1][0]
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="deformed")
-ax.set_aspect('equal')
 ax.legend()
-print(r3[-5])
+print(r2[-1])
 plt.show()
 
