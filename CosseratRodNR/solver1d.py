@@ -183,13 +183,20 @@ def get_e_operator(n, nx, dof, dr):
     """
     eop = np.zeros((6, dof * len(n)))
     for i in range(len(n)):
-        eop[0: 3, i * dof: 3 + i * dof] = n[i][0] * np.eye(3)
-        eop[0: 3, 3 + i * dof: 6 + i * dof] = nx[i][0] * dr
-        eop[3: 6, 3 + i * dof: 6 + i * dof] = n[i][0] * np.eye(3)
+        eop[0: 3, i * dof: 3 + i * dof] = nx[i][0] * np.eye(3)
+        eop[0: 3, 3 + i * dof: 6 + i * dof] = n[i][0] * dr
+        eop[3: 6, 3 + i * dof: 6 + i * dof] = nx[i][0] * np.eye(3)
     return eop
 
 
 def get_incremental_k(dt, dtds, rot):
+    """
+    According to Simo
+    :param dt: delta_theta
+    :param dtds: delta_theta'
+    :param rot: rotation matrix
+    :return: delta_kappa
+    """
     norm_dt = np.linalg.norm(dt)
     if np.isclose(norm_dt, 0):
         return dtds
@@ -198,7 +205,57 @@ def get_incremental_k(dt, dtds, rot):
     return rot.T @ (x * dtds + (1 - x) * (dt.T @ dtds) / norm_dt * dt / norm_dt + 0.5 * (x2 ** 2) * np.cross(dt, dtds))
 
 
+def get_incremental_k_path_independent(t, tds):
+    """
+    According to Crisfield & Jelenic
+    :param t: theta
+    :param tds: theta_prime
+    :return: kappa
+    """
+    norm_t = np.linalg.norm(t)
+    tensor_t = get_axial_tensor(t)
+    if np.isclose(norm_t, 0):
+        return tds
+    x = np.sin(norm_t) / norm_t
+    y = (1 - np.cos(norm_t)) / norm_t
+    return (1 / norm_t ** 2 * (1 - x) * t @ t.T + x * np.eye(3) + y * tensor_t) @ tds
+
+
+def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
+    """
+    :param dof: dof
+    :param e: e operator
+    :param n_tensor: axial of n
+    :param m_tensor: axial of m
+    :param n: shape function
+    :param nx: derivative of shape function
+    :return:
+    """
+    n_consolidate = np.zeros((6, dof * len(n)))
+    n_consolidate_prime = np.zeros((6, dof * len(n)))
+
+    nmmat = np.zeros((6, 6))
+    nmat = np.zeros((6, 6))
+    nmmat[0: 3, 3: 6] = -n_tensor
+    nmmat[3: 6, 3: 6] = -m_tensor
+    nmat[3: 6, 0: 3] = n_tensor
+    k = np.zeros((12, 12))
+    for i in range(len(n)):
+        n_consolidate[0: 6, dof * i: dof * (i + 1)] = n[i][0] * np.eye(dof)
+        n_consolidate_prime[0: 6, dof * i: dof * (i + 1)] = nx[i][0] * np.eye(dof)
+
+    for i in range(len(n)):
+        for j in range(len(n)):
+            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = (n_consolidate[0: 6, 6 * j: (j + 1) * 6] @ e[0: 6, 6 * i: (i + 1) * 6].T @ nmmat +
+                                                         n_consolidate[0: 6, 6 * i: (i + 1) * 6] @ n_consolidate_prime[0: 6, 6 * j: (j + 1) * 6] @ nmat)
+    return k
+
+
 def get_pi(rot):
+    """
+    :param rot: rotation
+    :return: pi matrix
+    """
     pi = np.zeros((6, 6))
     pi[0: 3, 0: 3] = rot.T
     pi[3: 6, 3: 6] = rot.T
