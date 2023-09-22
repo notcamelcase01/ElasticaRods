@@ -239,7 +239,7 @@ def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
     nmmat[0: 3, 3: 6] = -n_tensor
     nmmat[3: 6, 3: 6] = -m_tensor
     nmat[3: 6, 0: 3] = n_tensor
-    k = np.zeros((12, 12))
+    k = np.zeros((dof * len(n), dof * len(n)))
     for i in range(len(n)):
         n_consolidate[0: 6, dof * i: dof * (i + 1)] = n[i][0] * np.eye(dof)
         n_consolidate_prime[0: 6, dof * i: dof * (i + 1)] = nx[i][0] * np.eye(dof)

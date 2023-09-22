@@ -10,10 +10,10 @@ DIMENSIONS = 1
 DOF = 6
 LOAD_INCREMENTS = 10
 MAX_ITER = 10
-element_type = 2
+element_type = 3
 
 L = 1
-numberOfElements = 20
+numberOfElements = 1
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
@@ -101,7 +101,7 @@ for load_iter_ in range(LOAD_INCREMENTS):
         for i in range(6):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = sol.get_displacement_vector(KG, FG)
-    u -= du
+        u -= du
     for i in range(numberOfNodes):
         r1[i] = u[DOF * i][0]
         r2[i] = u[DOF * i + 1][0]
