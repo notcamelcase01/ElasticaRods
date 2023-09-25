@@ -218,7 +218,7 @@ def get_incremental_k_path_independent(t, tds):
         return tds
     x = np.sin(norm_t) / norm_t
     y = (1 - np.cos(norm_t)) / norm_t
-    return (1 / norm_t ** 2 * (1 - x) * t @ t.T + x * np.eye(3) + y * tensor_t) @ tds
+    return (1 / norm_t ** 2 * (1 - x) * t @ t.T + x * np.eye(3) - y * tensor_t) @ tds
 
 
 def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
