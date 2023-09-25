@@ -10,10 +10,10 @@ DIMENSIONS = 1
 DOF = 6
 LOAD_INCREMENTS = 10
 MAX_ITER = 10
-element_type = 3
+element_type = 2
 
 L = 1
-numberOfElements = 1
+numberOfElements = 20
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
@@ -34,6 +34,7 @@ Elasticity[3: 6, 3: 6] = ElasticityBending
 """
 Starting point
 """
+u *= 0
 for i in range(numberOfNodes):
     u[6 * i, 0] = 0
     u[6 * i + 1, 0] = 0
@@ -50,9 +51,13 @@ for i in range(numberOfNodes):
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
 tik = time.time()
-fapp__ = -np.linspace(0, 10.001, LOAD_INCREMENTS)
+fapp__ = -np.linspace(0, .0001, LOAD_INCREMENTS)
 for load_iter_ in range(LOAD_INCREMENTS):
-
+    # u *= 0
+    # for i in range(numberOfNodes):
+    #     u[6 * i, 0] = 0
+    #     u[6 * i + 1, 0] = 0
+    #     u[6 * i + 2, 0] = node_data[i]
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         for elm in range(numberOfElements):
@@ -63,6 +68,7 @@ for load_iter_ in range(LOAD_INCREMENTS):
             drloc = np.array([du[6 * n, 0], du[6 * n + 1, 0], du[6 * n + 2, 0]])
             dtloc = np.array([du[6 * n + 3, 0], du[6 * n + 4, 0], du[6 * n + 5, 0]])
             kloc, floc = sol.init_stiffness_force(nodesPerElement, DOF)
+
             gloc = np.zeros((6, 1))
             for xgp in range(len(wgp)):
 
@@ -75,7 +81,6 @@ for load_iter_ in range(LOAD_INCREMENTS):
                 t = tloc @ N_
                 rds = rloc @ Nx_
                 tds = tloc @ Nx_
-
                 dt = dtloc @ N_
                 dr = drloc @ N_
                 dtds = dtloc @ Nx_
@@ -100,8 +105,11 @@ for load_iter_ in range(LOAD_INCREMENTS):
         FG[-5, 0] = fapp__[load_iter_]
         for i in range(6):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
-        du = sol.get_displacement_vector(KG, FG)
-        u -= du
+        du = -sol.get_displacement_vector(KG, FG)
+        for i in range(numberOfNodes):
+            xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(du[6 * i + 3: 6 * i + 6])) @ sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(u[6 * i + 3: 6 * i + 6])))
+            u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
+            u[6 * i + 0: 6 * i + 3] += du[6 * i + 0: 6 * i + 3]
     for i in range(numberOfNodes):
         r1[i] = u[DOF * i][0]
         r2[i] = u[DOF * i + 1][0]
