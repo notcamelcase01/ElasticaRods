@@ -9,23 +9,30 @@ np.set_printoptions(linewidth=250)
 DIMENSIONS = 1
 DOF = 6
 LOAD_INCREMENTS = 10
-MAX_ITER = 10
+MAX_ITER = 5
 element_type = 2
-
 L = 1
-numberOfElements = 20
+numberOfElements = 100
+
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
 KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
 u = np.zeros_like(FG)
 nodesPerElement = element_type ** DIMENSIONS
-ElasticityExtension = np.array([[1, 0, 0],
-                                [0, 1, 0],
-                                [0, 0, 1]])
-ElasticityBending = np.array([[1, 0, 0],
-                              [0, 1, 0],
-                              [0, 0, 1]])
+E0 = 10000.0
+G0 = E0 / 2.0
+d = 0.01
+A = np.pi * d ** 2 * 0.25
+I = np.pi * d ** 4 / 64
+J = I * 2
+
+ElasticityExtension = np.array([[G0 * A, 0, 0],
+                                [0, G0 * A, 0],
+                                [0, 0, E0 * A]])
+ElasticityBending = np.array([[E0 * I, 0, 0],
+                              [0, E0 * I, 0],
+                              [0, 0, G0 * J]])
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
 Elasticity[3: 6, 3: 6] = ElasticityBending
@@ -35,10 +42,7 @@ Elasticity[3: 6, 3: 6] = ElasticityBending
 Starting point
 """
 u *= 0
-for i in range(numberOfNodes):
-    u[6 * i, 0] = 0
-    u[6 * i + 1, 0] = 0
-    u[6 * i + 2, 0] = node_data[i]
+u[6 * np.array([i for i in range(numberOfNodes)]) + 2, 0] = node_data
     # Thetas are zero
 fig, ax = plt.subplots(1, 1, figsize=(16, 9))
 r1 = np.zeros(numberOfNodes)
@@ -51,7 +55,7 @@ for i in range(numberOfNodes):
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
 tik = time.time()
-fapp__ = -np.linspace(0, .0001, LOAD_INCREMENTS)
+fapp__ = -np.linspace(0, .1, LOAD_INCREMENTS)
 for load_iter_ in range(LOAD_INCREMENTS):
     # u *= 0
     # for i in range(numberOfNodes):
@@ -86,7 +90,7 @@ for load_iter_ in range(LOAD_INCREMENTS):
                 dtds = dtloc @ Nx_
                 drds = drloc @ Nx_
 
-                Rot = sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(t))
+                Rot = sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(dt)) @ sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(t))
                 E = sol.get_e_operator(N_, Nx_, DOF, sol.get_axial_tensor(rds))
 
                 v = Rot.T @ rds
@@ -106,6 +110,7 @@ for load_iter_ in range(LOAD_INCREMENTS):
         for i in range(6):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = -sol.get_displacement_vector(KG, FG)
+        print(np.linalg.norm(du))
         for i in range(numberOfNodes):
             xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(du[6 * i + 3: 6 * i + 6])) @ sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(u[6 * i + 3: 6 * i + 6])))
             u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
