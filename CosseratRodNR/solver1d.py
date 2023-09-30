@@ -172,19 +172,19 @@ def get_assembly_vector(dof, n):
     return iv
 
 
-def get_e_operator(n, nx, dof, dr):
+def get_e_operator(n, nx, dof, rds):
     """
     returns transpose of e operator
     :param n: shape function
     :param nx: derivative of shape function
     :param dof: dof
-    :param dr: r\' skew symmetric
-    :return: e operator
+    :param rds: r\' skew symmetric
+    :return: transpose of e operator
     """
     eop = np.zeros((6, dof * len(n)))
     for i in range(len(n)):
         eop[0: 3, i * dof: 3 + i * dof] = nx[i][0] * np.eye(3)
-        eop[0: 3, 3 + i * dof: 6 + i * dof] = n[i][0] * dr
+        eop[0: 3, 3 + i * dof: 6 + i * dof] = n[i][0] * rds
         eop[3: 6, 3 + i * dof: 6 + i * dof] = nx[i][0] * np.eye(3)
     return eop
 
@@ -229,11 +229,8 @@ def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
     :param m_tensor: axial of m
     :param n: shape function
     :param nx: derivative of shape function
-    :return:
+    :return: geometric stiffness matrix
     """
-    n_consolidate = np.zeros((6, dof * len(n)))
-    n_consolidate_prime = np.zeros((6, dof * len(n)))
-
     nmmat = np.zeros((6, 6))
     nmat = np.zeros((6, 6))
     nmmat[0: 3, 3: 6] = -n_tensor
@@ -241,13 +238,8 @@ def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
     nmat[3: 6, 0: 3] = n_tensor
     k = np.zeros((dof * len(n), dof * len(n)))
     for i in range(len(n)):
-        n_consolidate[0: 6, dof * i: dof * (i + 1)] = n[i][0] * np.eye(dof)
-        n_consolidate_prime[0: 6, dof * i: dof * (i + 1)] = nx[i][0] * np.eye(dof)
-
-    for i in range(len(n)):
         for j in range(len(n)):
-            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = (n_consolidate[0: 6, 6 * j: (j + 1) * 6] @ e[0: 6, 6 * i: (i + 1) * 6].T @ nmmat +
-                                                         n_consolidate[0: 6, 6 * i: (i + 1) * 6] @ n_consolidate_prime[0: 6, 6 * j: (j + 1) * 6] @ nmat)
+            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[i][0] * (e[0: 6, 6 * i: (i + 1) * 6]).T @ nmmat + n[i][0] * nx[j][0] * nmat
     return k
 
 

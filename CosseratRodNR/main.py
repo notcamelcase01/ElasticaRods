@@ -8,11 +8,11 @@ np.set_printoptions(linewidth=250)
 
 DIMENSIONS = 1
 DOF = 6
-LOAD_INCREMENTS = 10
-MAX_ITER = 5
+LOAD_INCREMENTS = 5
+MAX_ITER = 40
 element_type = 2
 L = 1
-numberOfElements = 100
+numberOfElements = 20
 
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
@@ -36,13 +36,16 @@ ElasticityBending = np.array([[E0 * I, 0, 0],
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
 Elasticity[3: 6, 3: 6] = ElasticityBending
-
+Elasticity = np.eye(6)
+Elasticity[2, 2] = 1
+Elasticity[5, 5] = 1
+vi = np.array([i for i in range(numberOfNodes)])
 
 """
 Starting point
 """
 u *= 0
-u[6 * np.array([i for i in range(numberOfNodes)]) + 2, 0] = node_data
+u[6 * vi + 2, 0] = node_data
     # Thetas are zero
 fig, ax = plt.subplots(1, 1, figsize=(16, 9))
 r1 = np.zeros(numberOfNodes)
@@ -55,15 +58,15 @@ for i in range(numberOfNodes):
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
 tik = time.time()
-fapp__ = -np.linspace(0, .1, LOAD_INCREMENTS)
+fapp__ = -np.linspace(0, 1.0001, LOAD_INCREMENTS)
+print(fapp__)
 for load_iter_ in range(LOAD_INCREMENTS):
+    KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
+
     # u *= 0
-    # for i in range(numberOfNodes):
-    #     u[6 * i, 0] = 0
-    #     u[6 * i + 1, 0] = 0
-    #     u[6 * i + 2, 0] = node_data[i]
+    # u[6 * vi + 2, 0] = node_data
+    FG[-5, 0] = fapp__[load_iter_]
     for iter_ in range(MAX_ITER):
-        KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
@@ -95,7 +98,7 @@ for load_iter_ in range(LOAD_INCREMENTS):
 
                 v = Rot.T @ rds
                 gloc[0: 3] = Rot @ (v - np.array([0, 0, 1])[:, None])
-                kappa = sol.get_incremental_k_path_independent(dt, tds)
+                kappa = sol.get_incremental_k_path_independent(t, tds)
                 gloc[3: 6] = Rot @ kappa
                 pi = sol.get_pi(Rot)
                 n_tensor = sol.get_axial_tensor(gloc[0: 3])
@@ -106,7 +109,6 @@ for load_iter_ in range(LOAD_INCREMENTS):
             iv = np.array(sol.get_assembly_vector(DOF, n))
             FG[iv[:, None], 0] += floc
             KG[iv[:, None], iv] += kloc
-        FG[-5, 0] = fapp__[load_iter_]
         for i in range(6):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = -sol.get_displacement_vector(KG, FG)
@@ -129,6 +131,6 @@ for i in range(numberOfNodes):
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="deformed")
 ax.legend()
-print(r2[-1])
+print(r2[-1], r3[-1])
 plt.show()
 
