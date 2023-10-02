@@ -239,7 +239,7 @@ def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
     k = np.zeros((dof * len(n), dof * len(n)))
     for i in range(len(n)):
         for j in range(len(n)):
-            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[i][0] * (e[0: 6, 6 * i: (i + 1) * 6]).T @ nmmat + n[i][0] * nx[j][0] * nmat
+            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[j][0] * (e[0: 6, 6 * i: (i + 1) * 6]).T @ nmmat + n[i][0] * nx[j][0] * nmat
     return k
 
 
