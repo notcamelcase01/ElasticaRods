@@ -75,12 +75,12 @@ def get_connectivity_matrix(n, length, element_type=2):
     node_data = np.linspace(0, length, (element_type - 1) * n + 1)
     icon = np.zeros((element_type + 1, n), dtype=np.int32)
     if element_type == 3:
-        icon[0, :] = np.arange(0, n, length)
+        icon[0, :] = np.arange(0, n, 1)
         icon[1, :] = icon[0, :]
         icon[2, :] = icon[1, :] + 1
         icon[3, :] = icon[2, :] + 1
     elif element_type == 2:
-        icon[0, :] = np.arange(0, n, length)
+        icon[0, :] = np.arange(0, n, 1)
         icon[1, :] = icon[0, :]
         icon[2, :] = icon[1, :] + 1
     else:

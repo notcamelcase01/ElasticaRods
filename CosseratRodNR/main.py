@@ -1,18 +1,17 @@
 import numpy as np
 import solver1d as sol
 import matplotlib.pyplot as plt
-import time
 from tqdm import tqdm
 
 plt.style.use('dark_background')
 np.set_printoptions(linewidth=250)
 DIMENSIONS = 1
 DOF = 6
-LOAD_INCREMENTS = 20
+
 MAX_ITER = 10
 element_type = 2
 L = 1
-numberOfElements = 14
+numberOfElements = 20
 
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
@@ -22,7 +21,7 @@ u = np.zeros_like(FG)
 nodesPerElement = element_type ** DIMENSIONS
 E0 = 10 ** 6
 G0 = E0 / 2.0
-d = 0.01
+d = 1 / 1000 * 10.0
 A = np.pi * d ** 2 * 0.25
 I = np.pi * d ** 4 / 64
 J = I * 2
@@ -40,10 +39,11 @@ Elasticity[3: 6, 3: 6] = ElasticityBending
 # Elasticity[2, 2] = 10
 # Elasticity[5, 5] = 10
 vi = np.array([i for i in range(numberOfNodes)])
-
+FL = False
 """
 Starting point
 """
+resn = 0
 u *= 0
 u[6 * vi + 2, 0] = node_data
 # Thetas are zero
@@ -57,11 +57,15 @@ for i in range(numberOfNodes):
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
-fapp__ = -np.linspace(0, .01, LOAD_INCREMENTS)
-for load_iter_ in tqdm(range(LOAD_INCREMENTS), colour="GREEN"):
+max_load = 0.01
+LOAD_INCREMENTS = max(100, int(100/0.125 * max_load))
+fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
+for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
+
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-        FG[-5, 0] = fapp__[load_iter_]  # I spent my whole life choosing and I always chose wrong
+        #FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
+        FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
@@ -82,14 +86,8 @@ for load_iter_ in tqdm(range(LOAD_INCREMENTS), colour="GREEN"):
                 t = tloc @ N_
                 rds = rloc @ Nx_
                 tds = tloc @ Nx_
-                dt = dtloc @ N_
-                dr = drloc @ N_
-                dtds = dtloc @ Nx_
-                drds = drloc @ Nx_
 
                 Rot = sol.get_rotation_from_theta_tensor(t)
-                # E = sol.get_e_operator(N_, Nx_, DOF, sol.get_axial_tensor(rds))
-                # Rot = sol.get_rotation_from_theta_tensor(sol.get_axial_tensor(t))
 
                 v = Rot.T @ rds
                 gloc[0: 3] = Rot @ ElasticityExtension @ (v - np.array([0, 0, 1])[:, None])
@@ -100,7 +98,7 @@ for load_iter_ in tqdm(range(LOAD_INCREMENTS), colour="GREEN"):
                 m_tensor = sol.get_axial_tensor(gloc[3: 6])
                 tangent, res = sol.get_tangent_stiffness_residue(n_tensor, m_tensor, N_, Nx_, DOF, pi, Elasticity,
                                                                  sol.get_axial_tensor(rds), gloc)
-                floc += res * J * wgp[xgp]
+                floc += res * wgp[xgp] * J
                 kloc += tangent * wgp[xgp] * J
 
             iv = np.array(sol.get_assembly_vector(DOF, n))
@@ -111,6 +109,13 @@ for load_iter_ in tqdm(range(LOAD_INCREMENTS), colour="GREEN"):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = -sol.get_displacement_vector(KG, FG)
         resn = np.linalg.norm(FG)
+        if resn > 1:
+            FL = True
+            print("BRK")
+            break
+        delun = np.linalg.norm(du)
+        if delun > 1:
+            du = du / delun
         if np.isclose(resn, 0, atol=0.000001):
             break
 
@@ -118,19 +123,13 @@ for load_iter_ in tqdm(range(LOAD_INCREMENTS), colour="GREEN"):
             xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(u[6 * i + 3: 6 * i + 6]))
             u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
             u[6 * i + 0: 6 * i + 3] += du[6 * i + 0: 6 * i + 3]
-
-    for i in range(numberOfNodes):
-        r1[i] = u[DOF * i][0]
-        r2[i] = u[DOF * i + 1][0]
-        r3[i] = u[DOF * i + 2][0]
+    if FL:
+        break
+    r2 = u[DOF * vi + 1, 0]
+    r3 = u[DOF * vi + 2, 0]
     ax.plot(r3, r2)
 
-
-for i in range(numberOfNodes):
-    r1[i] = u[DOF * i][0]
-    r2[i] = u[DOF * i + 1][0]
-    r3[i] = u[DOF * i + 2][0]
-ax.plot(r3, r2, label="deformed")
 ax.legend()
 print(r2[-1], r3[-1], 1 + np.abs(fapp__[-1]) / (E0 * A), fapp__[-1] / (3 * E0 * I))
+print(r2[-1], r3[-1])
 plt.show()
