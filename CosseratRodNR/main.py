@@ -113,9 +113,6 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
             FL = True
             print("BRK")
             break
-        delun = np.linalg.norm(du)
-        if delun > 1:
-            du = du / delun
         if np.isclose(resn, 0, atol=0.000001):
             break
 
