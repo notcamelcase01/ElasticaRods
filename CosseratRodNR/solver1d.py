@@ -99,30 +99,59 @@ def init_stiffness_force(nnod, dof):
 
 def get_theta_from_rotation(rmat):
     """
+    Algorithm proposed by Spurrier
+    :param rmat: rotation matrix
+    :return: theta
+    """
+    q = np.zeros(4)
+    trq = np.trace(rmat)
+    v = np.array([trq, rmat[0, 0], rmat[1, 1], rmat[2, 2]])
+    m = v.argmax()
+    maxval = v[m]
+    if m == 0:
+        q[0] = 0.5 * np.sqrt(1 + maxval)
+        q[1] = 0.25 * (rmat[2, 1] - rmat[1, 2]) / q[0]
+        q[2] = 0.25 * (rmat[0, 2] - rmat[2, 0]) / q[0]
+        q[3] = 0.25 * (rmat[1, 0] - rmat[0, 1]) / q[0]
+    elif m == 1:
+        q[1] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
+        q[0] = 0.25 * (rmat[2, 1] - rmat[1, 2]) / q[1]
+        q[2] = 0.25 * (rmat[0, 2] + rmat[2, 0]) / q[1]
+        q[3] = 0.25 * (rmat[1, 0] + rmat[0, 1]) / q[1]
+    elif m == 2:
+        q[2] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
+        q[1] = 0.25 * (rmat[2, 1] + rmat[1, 2]) / q[2]
+        q[0] = 0.25 * (rmat[0, 2] - rmat[2, 0]) / q[2]
+        q[3] = 0.25 * (rmat[1, 0] + rmat[0, 1]) / q[2]
+    elif m == 3:
+        q[3] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
+        q[1] = 0.25 * (rmat[2, 1] + rmat[1, 2]) / q[3]
+        q[2] = 0.25 * (rmat[0, 2] + rmat[2, 0]) / q[3]
+        q[0] = 0.25 * (rmat[1, 0] - rmat[0, 1]) / q[3]
+    else:
+        raise Exception("not max index")
+    normt = 0
+    if q[0] >= 0:
+        normt = 2 * np.arcsin(np.linalg.norm(q[1:]))
+    else:
+        normt = 2 * np.pi - 2 * np.arcsin(np.linalg.norm(q[1:]))
+    if np.isclose(normt,0, atol=1e-6):
+        return np.zeros((3, 3))
+    else:
+        #print(normt/np.linalg.norm(q[1:]) * q[1:])
+        return get_axial_tensor(normt/np.linalg.norm(q[1:]) * q[1:])
+
+
+def get_theta_from_rotation_deprecated(rmat):
+    """
+    Lie group log map
     :param rmat: rotation matrix
     :return: theta vector
-    """
-    """
-    **Without Lie group log map**
-    
-    theta1 = np.zeros(3)
-    if rmat[2, 0] != 1 or rmat[2, 0] != -1:
-        theta1[1] = np.pi - np.arcsin(rmat[2, 0])
-        theta1[0] = np.arctan2(rmat[2, 1] / np.cos(theta1[1]), rmat[2, 1] / np.cos(theta1[1]))
-        theta1[2] = np.arctan2(rmat[1, 0] / np.cos(theta1[1]), rmat[1, 0] / np.cos(theta1[1]))
-    else:
-        theta1[2] = 0
-        if rmat[2, 0] == -1:
-            theta1[1] = np.pi / 2
-            theta1[0] = theta1[2] + np.arctan2(rmat[0, 1], rmat[0, 2])
-        else:
-            theta1[1] = -np.pi / 2
-            theta1[0] = -theta1[2] + np.arctan2(-rmat[0, 1], -rmat[0, 2])
-    return theta1
     """
     t = np.arccos((np.trace(rmat) - 1) / 2)
     if np.isclose(t, 0):
         return np.zeros((3, 3))
+    # print(get_axial_from_skew_symmetric_tensor(t * 0.5 / np.sin(t) * (rmat - rmat.T)))
     return t * 0.5 / np.sin(t) * (rmat - rmat.T)
 
 
@@ -147,7 +176,7 @@ def get_axial_from_skew_symmetric_tensor(x):
     return np.array([x[2, 1], x[0, 2], x[1, 0]])
 
 
-def get_rotation_from_theta_tensor(x):
+def get_rotation_from_theta_tensor_deprecated(x):
     """
     x better be skew symmetric
     :param x: skew symmetric tensor
@@ -157,6 +186,27 @@ def get_rotation_from_theta_tensor(x):
     if np.isclose(t, 0):
         return np.eye(3)
     return np.eye(3) + np.sin(t) / t * x + (1 - np.cos(t)) / t ** 2 * (x @ x)
+
+
+def get_rotation_from_theta_tensor(x):
+    """
+    using quaternions
+    :param x: skew symmetric tensor
+    :return: rotation tensor
+    """
+    x = np.reshape(x, (3,))
+    normt = np.linalg.norm(x)
+    if np.isclose(normt, 0, atol=1e-6):
+        return np.eye(3)
+    else:
+        q = np.zeros(4)
+        q[0] = np.cos(normt / 2)
+        q[1:] = np.sin(normt / 2) / normt * x
+        return 2 * np.array([
+            [q[0] ** 2 + q[1] ** 2 - 0.5, q[1] * q[2] - q[3] * q[0], q[1] * q[3] + q[2] * q[0]],
+            [q[2] * q[1] + q[3] * q[0], q[0] ** 2 + q[2] ** 2 - 0.5, q[2] * q[3] - q[1] * q[0]],
+            [q[3] * q[1] - q[2] * q[0], q[3] * q[2] + q[1] * q[0], q[0] ** 2 + q[3] ** 2 - 0.5]
+        ])
 
 
 def get_assembly_vector(dof, n):
@@ -229,7 +279,7 @@ def get_e(dof, n, n_, rds):
     return e
 
 
-def get_tangent_stiffness(n_tensor, m_tensor, n, nx, dof, pi, c, rds, gloc):
+def get_tangent_stiffness_residue(n_tensor, m_tensor, n, nx, dof, pi, c, rds, gloc):
     """
     :param gloc: gloc
     :param rds: rds
