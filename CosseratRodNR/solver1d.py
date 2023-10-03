@@ -184,7 +184,7 @@ def get_e_operator(n, nx, dof, rds):
     eop = np.zeros((6, dof * len(n)))
     for i in range(len(n)):
         eop[0: 3, i * dof: 3 + i * dof] = nx[i][0] * np.eye(3)
-        eop[0: 3, 3 + i * dof: 6 + i * dof] = n[i][0] * rds
+        eop[3: 6, i * dof: 3 + i * dof] = n[i][0] * rds
         eop[3: 6, 3 + i * dof: 6 + i * dof] = nx[i][0] * np.eye(3)
     return eop
 
@@ -221,9 +221,21 @@ def get_incremental_k_path_independent(t, tds):
     return (1 / norm_t ** 2 * (1 - x) * t @ t.T + x * np.eye(3) - y * tensor_t) @ tds
 
 
-def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
+def get_e(dof, n, n_, rds):
+    e = np.zeros((dof,  dof))
+    e[0: 3, 0: 3] = n_ * np.eye(3)
+    e[3: 6, 3: 6] = n_ * np.eye(3)
+    e[3: 6, 0: 3] = n * rds.T
+    return e
+
+
+def get_tangent_stiffness(n_tensor, m_tensor, n, nx, dof, pi, c, rds, gloc):
     """
+    :param gloc: gloc
+    :param rds: rds
     :param dof: dof
+    :param c: elasticity
+    :param pi: pi
     :param e: e operator
     :param n_tensor: axial of n
     :param m_tensor: axial of m
@@ -237,10 +249,28 @@ def get_geometric_tangent_stiffness(e, n_tensor, m_tensor, n, nx, dof):
     nmmat[3: 6, 3: 6] = -m_tensor
     nmat[3: 6, 0: 3] = n_tensor
     k = np.zeros((dof * len(n), dof * len(n)))
+    r = np.zeros((dof * len(n), 1))
+
     for i in range(len(n)):
+        r[6 * i: 6 * (i + 1)] += get_e(dof, n[i][0], nx[i][0], rds) @ gloc
         for j in range(len(n)):
-            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[i][0] * (e[0: 6, 6 * i: (i + 1) * 6]).T @ nmmat + n[i][0] * nx[j][0] * nmat
-    return k
+            # k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[j][0] * (e[0: 6, 6 * i: (i + 1) * 6]) @ nmmat + n[i][0] * nx[j][0] * nmat + e[0: 6, 6 * i: (i + 1) * 6] @ pi @ c @ pi.T @ e[0: 6, 6 * j: (j + 1) * 6].T
+            k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] += get_e(dof, n[i][0], nx[i][0], rds) @ pi @ c @ pi.T @ get_e(dof, n[j][0], nx[j][0], rds).T + n[j][0] * get_e(dof, n[i][0], nx[i][0], rds) @ nmmat + n[i][0] * nx[j][0] * nmat
+    return k, r
+
+
+def get_residue(gloc, dof, e, n):
+    """
+    :param n: shape fun
+    :param gloc: stresses
+    :param dof: dof
+    :param e: e operator
+    :return: residue
+    """
+    r = np.zeros((dof * len(n), 1))
+    for i in range(len(n)):
+        r[6 * i: 6 * (i + 1)] = e[0: 6, 6 * i: (i + 1) * 6].T @ gloc
+    return r
 
 
 def get_pi(rot):
