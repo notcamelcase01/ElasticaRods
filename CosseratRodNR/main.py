@@ -10,7 +10,7 @@ np.set_printoptions(linewidth=250)
 DIMENSIONS = 1
 DOF = 6
 
-MAX_ITER = 20
+MAX_ITER = 10
 element_type = 2
 L = 1
 numberOfElements = 20
@@ -59,15 +59,15 @@ for i in range(numberOfNodes):
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
-max_load = 0.02
-LOAD_INCREMENTS = max(1000, int(100/0.125 * max_load))
+max_load = 0.1
+LOAD_INCREMENTS = max(40, int(100/0.125 * max_load))
 fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
 for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
 
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-        FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
-        #FG[-5, 0] = fapp__[load_iter_]
+        #FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
+        FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
