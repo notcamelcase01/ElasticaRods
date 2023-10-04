@@ -18,21 +18,20 @@ numberOfElements = 20
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
-KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-u = np.zeros_like(FG)
+u = np.zeros((numberOfNodes * DOF, 1))
 nodesPerElement = element_type ** DIMENSIONS
 E0 = 10 ** 6
 G0 = E0 / 2.0
 d = 1 / 1000 * 10.0
 A = np.pi * d ** 2 * 0.25
-I = np.pi * d ** 4 / 64
-J = I * 2
+i0 = np.pi * d ** 4 / 64
+J = i0 * 2
 
 ElasticityExtension = np.array([[G0 * A, 0, 0],
                                 [0, G0 * A, 0],
                                 [0, 0, E0 * A]])
-ElasticityBending = np.array([[E0 * I, 0, 0],
-                              [0, E0 * I, 0],
+ElasticityBending = np.array([[E0 * i0, 0, 0],
+                              [0, E0 * i0, 0],
                               [0, 0, G0 * J]])
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
@@ -49,7 +48,7 @@ resn = 0
 u *= 0
 u[6 * vi + 2, 0] = node_data
 # Thetas are zero
-fig, ax = plt.subplots(1, 1, figsize=(16, 9))
+fig, (ax, ay) = plt.subplots(1, 2, figsize=(9, 5))
 r1 = np.zeros(numberOfNodes)
 r2 = np.zeros(numberOfNodes)
 r3 = np.zeros(numberOfNodes)
@@ -58,12 +57,10 @@ for i in range(numberOfNodes):
     r2[i] = u[DOF * i + 1][0]
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
-du = np.zeros_like(u)
-max_load = 0.1
-LOAD_INCREMENTS = max(40, int(100/0.125 * max_load))
+max_load = 0.0001
+LOAD_INCREMENTS = max(20, int(100/0.125 * max_load))
 fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
-for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
-
+for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="CYAN"):
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         #FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
@@ -73,18 +70,15 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
             xloc = node_data[n][:, None]
             rloc = np.array([u[6 * n, 0], u[6 * n + 1, 0], u[6 * n + 2, 0]])
             tloc = np.array([u[6 * n + 3, 0], u[6 * n + 4, 0], u[6 * n + 5, 0]])
-            drloc = np.array([du[6 * n, 0], du[6 * n + 1, 0], du[6 * n + 2, 0]])
-            dtloc = np.array([du[6 * n + 3, 0], du[6 * n + 4, 0], du[6 * n + 5, 0]])
+
             kloc, floc = sol.init_stiffness_force(nodesPerElement, DOF)
 
             gloc = np.zeros((6, 1))
             for xgp in range(len(wgp)):
                 N_, Bmat = sol.get_lagrange_fn(gp[xgp], element_type)
-                xx = (N_.T @ xloc)[0][0]
                 J = (xloc.T @ Bmat)[0][0]
                 Nx_ = 1 / J * Bmat
 
-                r = rloc @ N_
                 t = tloc @ N_
                 rds = rloc @ Nx_
                 tds = tloc @ Nx_
@@ -107,16 +101,17 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
             FG[iv[:, None], 0] += floc
             KG[iv[:, None], iv] += kloc
 
-        for i in range(6):
-            KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
+        for ibc in range(6):
+            KG, FG = sol.impose_boundary_condition(KG, FG, ibc, 0)
         du = -sol.get_displacement_vector(KG, FG)
         resn = np.linalg.norm(FG)
         if resn > max_load * 1000000:
             FL = True
             print("BRK", fapp__[load_iter_])
             break
-        if np.isclose(resn, 0, atol=0.000001):
-            break
+        # if np.isclose(resn, 0, atol=0.000001):
+        #     print("BRK", fapp__[load_iter_])
+        #     break
 
         for i in range(numberOfNodes):
             xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(u[6 * i + 3: 6 * i + 6]))
@@ -128,10 +123,12 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
     r3 = u[DOF * vi + 2, 0]
     ax.plot(r3, r2)
 
+    ay.scatter(abs(fapp__[load_iter_]), r2[-1])
+
 r2 = u[DOF * vi + 1, 0]
 r3 = u[DOF * vi + 2, 0]
 ax.plot(r3, r2, marker="v")
 ax.legend()
-print(r2[-1], r3[-1], 1 + np.abs(fapp__[-1]) / (E0 * A), fapp__[-1] / (3 * E0 * I))
+print(r2[-1], r3[-1], 1 + np.abs(fapp__[-1]) / (E0 * A), fapp__[-1] / (3 * E0 * i0))
 print(r2[-1], r3[-1])
 plt.show()

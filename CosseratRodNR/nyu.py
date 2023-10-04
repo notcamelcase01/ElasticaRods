@@ -43,25 +43,25 @@ pause = False
 MAX_ITER = 10
 element_type = 2
 L = 1
-numberOfElements = 20
+numberOfElements = 10
 
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
 wgp, gp = sol.init_gauss_points(1)
-vi = np.array([i for i in range(numberOfNodes)])
+vi = np.array([ii for ii in range(numberOfNodes)])
 nodesPerElement = element_type ** DIMENSIONS
 E0 = 10 ** 6
 G0 = E0 / 2.0
 d = 1 / 1000 * 10.0
 A = np.pi * d ** 2 * 0.25
-I = np.pi * d ** 4 / 64
-J = I * 2
+I0 = np.pi * d ** 4 / 64
+J = I0 * 2
 
 ElasticityExtension = np.array([[G0 * A, 0, 0],
                                 [0, G0 * A, 0],
                                 [0, 0, E0 * A]])
-ElasticityBending = np.array([[E0 * I, 0, 0],
-                              [0, E0 * I, 0],
+ElasticityBending = np.array([[E0 * I0, 0, 0],
+                              [0, E0 * I0, 0],
                               [0, 0, G0 * J]])
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
@@ -69,21 +69,22 @@ Elasticity[3: 6, 3: 6] = ElasticityBending
 # Elasticity = np.eye(6)
 # Elasticity[2, 2] = 10
 # Elasticity[5, 5] = 10
-fig, (ax, ay) = plt.subplots(1, 2, figsize=(16, 9))
+fig, (ax, ay) = plt.subplots(1, 2, figsize=(14, 8))
 ax.set_xlim(0, L)
 """
 Starting point
 """
-max_load = 0.1
-LOAD_INCREMENTS = max(100, int(100 / 0.125 * max_load))
+max_load = 0.002
+LOAD_INCREMENTS = max(2000, int(100 / 0.125 * max_load))
 fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
 
 
-def fea(load_iter_, u, is_halt=False):
+def fea(load_iter_, is_halt=False):
+    global u
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-        #FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
-        FG[-5, 0] = fapp__[load_iter_]
+        FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
+        #FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
@@ -128,43 +129,41 @@ def fea(load_iter_, u, is_halt=False):
             is_halt = True
             print("BRK", fapp__[load_iter_])
             break
-        if np.isclose(resn, 0, atol=0.000001):
-            break
 
-        for node in range(numberOfNodes):
+        for i in range(numberOfNodes):
             xxx = sol.get_theta_from_rotation(
-                sol.get_rotation_from_theta_tensor(du[6 * node + 3: 6 * node + 6]) @ sol.get_rotation_from_theta_tensor(
-                    u[6 * node + 3: 6 * node + 6]))
-            u[6 * node + 3: 6 * node + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
-            u[6 * node + 0: 6 * node + 3] += du[6 * node + 0: 6 * node + 3]
+                sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(
+                    u[6 * i + 3: 6 * i + 6]))
+            u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
+            u[6 * i + 0: 6 * i + 3] += du[6 * i + 0: 6 * i + 3]
 
-    return u, is_halt
+    return is_halt
 
 
-displacement = np.zeros((numberOfNodes * DOF, 1))
-displacement *= 0
-displacement[6 * vi + 2, 0] = node_data
-du = np.zeros_like(displacement)
+u = np.zeros((numberOfNodes * DOF, 1))
+u[6 * vi + 2, 0] = node_data
 
 
 def act(i):
+
     ax.set_title("load = " + str(np.round(fapp__[i], 4)) + " (" + str(i + 1) + " / " + str(len(fapp__)) + ")")
-    global displacement
+    global u
     global halt
-    displacement, halt = fea(i, displacement)
+    halt = fea(i)
     if halt:
         controlled_animation.stop()
         return
-    y = displacement[DOF * vi + 1, 0]
-    x = displacement[DOF * vi + 2, 0]
+    y = u[DOF * vi + 1, 0]
+    x = u[DOF * vi + 2, 0]
     ax.plot(x, y)
     ay.scatter(abs(fapp__[i]), y[-1])
-    ax.set_ylim(-0.01 + np.min(y), np.max(y) + 0.01)
+    ax.set_ylim(-1e-9 + np.min(y), np.max(y))
 
 
-ax.set_xlabel("e3", fontsize=30)
-ax.set_ylabel("e2", fontsize=30)
-ay.set_xlabel("load", fontsize=30)
-ay.set_ylabel("y displacement of tip", fontsize=25)
-controlled_animation = ControlledAnimation(fig, act, frames=len(fapp__), interval=1, repeat=False)
+ax.set_xlabel("e3", fontsize=15)
+ax.set_ylabel("e2", fontsize=15)
+ay.set_xlabel("load", fontsize=15)
+ay.set_ylabel("y displacement of tip", fontsize=15)
+controlled_animation = ControlledAnimation(fig, act, frames=len(fapp__), interval=1000, repeat=False)
 controlled_animation.start()
+print(u[-6:, 0][1])
