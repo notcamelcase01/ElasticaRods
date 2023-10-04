@@ -5,10 +5,12 @@ from tqdm import tqdm
 
 plt.style.use('dark_background')
 np.set_printoptions(linewidth=250)
+
+
 DIMENSIONS = 1
 DOF = 6
 
-MAX_ITER = 10
+MAX_ITER = 20
 element_type = 2
 L = 1
 numberOfElements = 20
@@ -57,15 +59,15 @@ for i in range(numberOfNodes):
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
 du = np.zeros_like(u)
-max_load = 0.01
-LOAD_INCREMENTS = max(100, int(100/0.125 * max_load))
+max_load = 0.02
+LOAD_INCREMENTS = max(1000, int(100/0.125 * max_load))
 fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
 for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
 
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-        #FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
-        FG[-5, 0] = fapp__[load_iter_]
+        FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
+        #FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
@@ -109,9 +111,9 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
             KG, FG = sol.impose_boundary_condition(KG, FG, i, 0)
         du = -sol.get_displacement_vector(KG, FG)
         resn = np.linalg.norm(FG)
-        if resn > 1:
+        if resn > max_load * 1000000:
             FL = True
-            print("BRK")
+            print("BRK", fapp__[load_iter_])
             break
         if np.isclose(resn, 0, atol=0.000001):
             break
@@ -126,6 +128,9 @@ for load_iter_ in tqdm(range(int(LOAD_INCREMENTS)), colour="GREEN"):
     r3 = u[DOF * vi + 2, 0]
     ax.plot(r3, r2)
 
+r2 = u[DOF * vi + 1, 0]
+r3 = u[DOF * vi + 2, 0]
+ax.plot(r3, r2, marker="v")
 ax.legend()
 print(r2[-1], r3[-1], 1 + np.abs(fapp__[-1]) / (E0 * A), fapp__[-1] / (3 * E0 * I))
 print(r2[-1], r3[-1])

@@ -178,10 +178,10 @@ def get_axial_from_skew_symmetric_tensor(x):
 
 def get_rotation_from_theta_tensor_deprecated(x):
     """
-    x better be skew symmetric
     :param x: skew symmetric tensor
     :return: rotation tensor
     """
+    x = get_axial_tensor(x)
     t = np.sqrt(0.5 * np.trace(x.T @ x))
     if np.isclose(t, 0):
         return np.eye(3)
