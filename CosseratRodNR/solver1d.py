@@ -116,17 +116,17 @@ def get_theta_from_rotation(rmat):
     elif m == 1:
         q[1] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
         q[0] = 0.25 * (rmat[2, 1] - rmat[1, 2]) / q[1]
-        q[2] = 0.25 * (rmat[0, 2] + rmat[2, 0]) / q[1]
-        q[3] = 0.25 * (rmat[1, 0] + rmat[0, 1]) / q[1]
+        q[2] = 0.25 * (rmat[0, 1] + rmat[1, 0]) / q[1]
+        q[3] = 0.25 * (rmat[2, 0] + rmat[0, 2]) / q[1]
     elif m == 2:
         q[2] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
-        q[1] = 0.25 * (rmat[2, 1] + rmat[1, 2]) / q[2]
+        q[1] = 0.25 * (rmat[0, 1] + rmat[1, 0]) / q[2]
         q[0] = 0.25 * (rmat[0, 2] - rmat[2, 0]) / q[2]
-        q[3] = 0.25 * (rmat[1, 0] + rmat[0, 1]) / q[2]
+        q[3] = 0.25 * (rmat[1, 2] + rmat[2, 1]) / q[2]
     elif m == 3:
         q[3] = np.sqrt(0.5 * maxval + 0.25 * (1 - trq))
-        q[1] = 0.25 * (rmat[2, 1] + rmat[1, 2]) / q[3]
-        q[2] = 0.25 * (rmat[0, 2] + rmat[2, 0]) / q[3]
+        q[1] = 0.25 * (rmat[2, 0] + rmat[0, 2]) / q[3]
+        q[2] = 0.25 * (rmat[1, 2] + rmat[2, 1]) / q[3]
         q[0] = 0.25 * (rmat[1, 0] - rmat[0, 1]) / q[3]
     else:
         raise Exception("not max index")
@@ -135,7 +135,7 @@ def get_theta_from_rotation(rmat):
         normt = 2 * np.arcsin(np.linalg.norm(q[1:]))
     else:
         normt = 2 * np.pi - 2 * np.arcsin(np.linalg.norm(q[1:]))
-    if np.isclose(normt,0, atol=1e-6):
+    if np.isclose(normt,0, atol=1e-10):
         return np.zeros((3, 3))
     else:
         #print(normt/np.linalg.norm(q[1:]) * q[1:])
@@ -222,23 +222,6 @@ def get_assembly_vector(dof, n):
     return iv
 
 
-def get_e_operator(n, nx, dof, rds):
-    """
-    returns transpose of e operator
-    :param n: shape function
-    :param nx: derivative of shape function
-    :param dof: dof
-    :param rds: r\' skew symmetric
-    :return: transpose of e operator
-    """
-    eop = np.zeros((6, dof * len(n)))
-    for i in range(len(n)):
-        eop[0: 3, i * dof: 3 + i * dof] = nx[i][0] * np.eye(3)
-        eop[3: 6, i * dof: 3 + i * dof] = n[i][0] * rds
-        eop[3: 6, 3 + i * dof: 6 + i * dof] = nx[i][0] * np.eye(3)
-    return eop
-
-
 def get_incremental_k(dt, dtds, rot):
     """
     According to Simo
@@ -248,11 +231,11 @@ def get_incremental_k(dt, dtds, rot):
     :return: delta_kappa
     """
     norm_dt = np.linalg.norm(dt)
-    if np.isclose(norm_dt, 0):
-        return dtds
+    if np.isclose(norm_dt, 0, atol=1e-10):
+        return dtds + 0.5 * np.cross(dt.reshape(3,), dtds.reshape(3,))[:, None]
     x = np.sin(norm_dt) / norm_dt
     x2 = np.sin(norm_dt * 0.5) / (norm_dt * 0.5)
-    return rot.T @ (x * dtds + (1 - x) * (dt.T @ dtds) / norm_dt * dt / norm_dt + 0.5 * (x2 ** 2) * np.cross(dt, dtds))
+    return rot.T @ (x * dtds + (1 - x) * (dt.T @ dtds)[0][0] / norm_dt * dt / norm_dt + 0.5 * (x2 ** 2) * np.cross(dt.reshape(3,), dtds.reshape(3,))[:, None])
 
 
 def get_incremental_k_path_independent(t, tds):
@@ -304,7 +287,6 @@ def get_tangent_stiffness_residue(n_tensor, m_tensor, n, nx, dof, pi, c, rds, gl
     for i in range(len(n)):
         r[6 * i: 6 * (i + 1)] += get_e(dof, n[i][0], nx[i][0], rds) @ gloc
         for j in range(len(n)):
-            # k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] = n[j][0] * (e[0: 6, 6 * i: (i + 1) * 6]) @ nmmat + n[i][0] * nx[j][0] * nmat + e[0: 6, 6 * i: (i + 1) * 6] @ pi @ c @ pi.T @ e[0: 6, 6 * j: (j + 1) * 6].T
             k[6 * i: (i + 1) * 6, 6 * j: (j + 1) * 6] += get_e(dof, n[i][0], nx[i][0], rds) @ pi @ c @ pi.T @ get_e(dof, n[j][0], nx[j][0], rds).T + n[j][0] * get_e(dof, n[i][0], nx[i][0], rds) @ nmmat + n[i][0] * nx[j][0] * nmat
     return k, r
 

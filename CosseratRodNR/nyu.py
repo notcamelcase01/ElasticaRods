@@ -40,7 +40,7 @@ DIMENSIONS = 1
 DOF = 6
 halt = False
 pause = False
-MAX_ITER = 10
+MAX_ITER = 20
 element_type = 2
 L = 1
 numberOfElements = 10
@@ -51,7 +51,8 @@ wgp, gp = sol.init_gauss_points(1)
 vi = np.array([ii for ii in range(numberOfNodes)])
 nodesPerElement = element_type ** DIMENSIONS
 E0 = 10 ** 6
-G0 = E0 / 2.0
+mu = 0
+G0 = E0 / 2.0 / (1 + mu)
 d = 1 / 1000 * 10.0
 A = np.pi * d ** 2 * 0.25
 I0 = np.pi * d ** 4 / 64
@@ -75,7 +76,7 @@ ax.set_xlim(0, L)
 Starting point
 """
 max_load = 0.002
-LOAD_INCREMENTS = max(2000, int(100 / 0.125 * max_load))
+LOAD_INCREMENTS = 5
 fapp__ = -np.linspace(0, max_load, LOAD_INCREMENTS)
 
 
@@ -83,7 +84,7 @@ def fea(load_iter_, is_halt=False):
     global u
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
-        FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
+        FG[-6:-3] += sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
         #FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
@@ -108,6 +109,13 @@ def fea(load_iter_, is_halt=False):
                 v = Rot.T @ rds
                 gloc[0: 3] = Rot @ ElasticityExtension @ (v - np.array([0, 0, 1])[:, None])
                 kappa = sol.get_incremental_k_path_independent(t, tds)
+                if iter_ == -1:
+                    print("Load :", fapp__[load_iter_])
+                    print("element :", elm)
+                    print("Iteration :", iter_)
+                    print("kappa :", kappa.T[0])
+                    #print("v :", v.T)
+                    print("-------------------")
                 gloc[3: 6] = Rot @ ElasticityBending @ kappa
                 pi = sol.get_pi(Rot)
                 n_tensor = sol.get_axial_tensor(gloc[0: 3])
@@ -125,11 +133,13 @@ def fea(load_iter_, is_halt=False):
             KG, FG = sol.impose_boundary_condition(KG, FG, ibc, 0)
         du = -sol.get_displacement_vector(KG, FG)
         resn = np.linalg.norm(FG)
-        if resn > max_load * 1000000:
+        # if resn > max_load * 1000000:
+        #     is_halt = True
+        #     print("BRK", fapp__[load_iter_])
+        #     break
+        if resn < 1e-6:
             is_halt = True
-            print("BRK", fapp__[load_iter_])
             break
-
         for i in range(numberOfNodes):
             xxx = sol.get_theta_from_rotation(
                 sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(
@@ -145,8 +155,7 @@ u[6 * vi + 2, 0] = node_data
 
 
 def act(i):
-
-    ax.set_title("load = " + str(np.round(fapp__[i], 4)) + " (" + str(i + 1) + " / " + str(len(fapp__)) + ")")
+    ax.set_title("load = " + str(np.round(fapp__[i], 5)) + " (" + str(i + 1) + " / " + str(len(fapp__)) + ")")
     global u
     global halt
     halt = fea(i)
@@ -164,6 +173,6 @@ ax.set_xlabel("e3", fontsize=15)
 ax.set_ylabel("e2", fontsize=15)
 ay.set_xlabel("load", fontsize=15)
 ay.set_ylabel("y displacement of tip", fontsize=15)
-controlled_animation = ControlledAnimation(fig, act, frames=len(fapp__), interval=1000, repeat=False)
+controlled_animation = ControlledAnimation(fig, act, frames=len(fapp__), repeat=False)
 controlled_animation.start()
 print(u[-6:, 0][1])
