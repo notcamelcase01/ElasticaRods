@@ -97,7 +97,7 @@ def init_stiffness_force(nnod, dof):
     return np.zeros((nnod * dof, nnod * dof)), np.zeros((nnod * dof, 1))
 
 
-def get_theta_from_rotation(rmat):
+def get_theta_from_rotation(rmat, logg=False):
     """
     Algorithm proposed by Spurrier
     :param rmat: rotation matrix
@@ -131,6 +131,8 @@ def get_theta_from_rotation(rmat):
     else:
         raise Exception("not max index")
     normt = 0
+    if logg and False:
+        print(q[0])
     if q[0] >= 0:
         normt = 2 * np.arcsin(np.linalg.norm(q[1:]))
     else:
@@ -142,12 +144,26 @@ def get_theta_from_rotation(rmat):
         return get_axial_tensor(normt/np.linalg.norm(q[1:]) * q[1:])
 
 
-def get_theta_from_rotation_deprecated(rmat):
+    # if q[0] >= 0:
+    #     normt = 2 * np.arcsin(np.linalg.norm(q[1:]))
+    # else:
+    #     normt = 2 * np.pi - 2 * np.arcsin(np.linalg.norm(q[1:]))
+    # if np.isclose(normt,0, atol=1e-10):
+    #     return np.zeros((3, 3))
+    # else:
+    #     #print(normt/np.linalg.norm(q[1:]) * q[1:])
+    #     y = normt/np.linalg.norm(q[1:]) * q[1:]
+    #     for i in range(len(y)):
+    #         y[i] = y[i] + 2 * np.pi * (np.pi - y[i]) / 2 / np.pi
+    # return get_axial_tensor(y)
+
+def get_theta_from_rotation_depricated(rmat, logg=False):
     """
     Lie group log map
     :param rmat: rotation matrix
     :return: theta vector
     """
+    print("sdfsd", (np.trace(rmat) - 1) / 2)
     t = np.arccos((np.trace(rmat) - 1) / 2)
     if np.isclose(t, 0):
         return np.zeros((3, 3))
@@ -176,16 +192,20 @@ def get_axial_from_skew_symmetric_tensor(x):
     return np.array([x[2, 1], x[0, 2], x[1, 0]])
 
 
-def get_rotation_from_theta_tensor_deprecated(x):
+def get_rotation_from_theta_tensor_depricated(x):
     """
-    :param x: skew symmetric tensor
+    :param x: theta vector
     :return: rotation tensor
     """
-    x = get_axial_tensor(x)
-    t = np.sqrt(0.5 * np.trace(x.T @ x))
+    t = np.linalg.norm(x)
+
     if np.isclose(t, 0):
         return np.eye(3)
-    return np.eye(3) + np.sin(t) / t * x + (1 - np.cos(t)) / t ** 2 * (x @ x)
+    x = x / t
+    print("sd", x)
+    x = get_axial_tensor(x)
+
+    return np.eye(3) + np.sin(t) + (1 - np.cos(t)) * x @ x
 
 
 def get_rotation_from_theta_tensor(x):
@@ -283,7 +303,6 @@ def get_tangent_stiffness_residue(n_tensor, m_tensor, n, nx, dof, pi, c, rds, gl
     nmat[3: 6, 0: 3] = n_tensor
     k = np.zeros((dof * len(n), dof * len(n)))
     r = np.zeros((dof * len(n), 1))
-
     for i in range(len(n)):
         r[6 * i: 6 * (i + 1)] += get_e(dof, n[i][0], nx[i][0], rds) @ gloc
         for j in range(len(n)):
