@@ -11,10 +11,10 @@ np.set_printoptions(linewidth=250)
 DIMENSIONS = 1
 DOF = 6
 
-MAX_ITER = 100
+MAX_ITER = 50
 element_type = 2
-L = 1
-numberOfElements = 40
+L = 100
+numberOfElements = 20
 
 icon, node_data = sol.get_connectivity_matrix(numberOfElements, L, element_type)
 numberOfNodes = len(node_data)
@@ -22,7 +22,7 @@ ngpt = 1
 wgp, gp = sol.init_gauss_points(ngpt)
 u = np.zeros((numberOfNodes * DOF, 1))
 du = np.zeros((numberOfNodes * DOF, 1))
-major_kappa = np.zeros((numberOfNodes * 3 * ngpt, 1))
+major_kappa = np.zeros((numberOfElements * 3, 1))
 nodesPerElement = element_type ** DIMENSIONS
 E0 = 10 ** 6
 G0 = E0 / 2.0
@@ -30,13 +30,23 @@ d = 1 / 1000 * 10.0
 A = np.pi * d ** 2 * 0.25
 i0 = np.pi * d ** 4 / 64
 J = i0 * 2
-
+EI = 3.5 * 10 ** 7
+GA = 1.6 * 10 ** 8
 ElasticityExtension = np.array([[G0 * A, 0, 0],
                                 [0, G0 * A, 0],
                                 [0, 0, E0 * A]])
 ElasticityBending = np.array([[E0 * i0, 0, 0],
                               [0, E0 * i0, 0],
                               [0, 0, G0 * J]])
+
+ElasticityExtension = np.array([[GA, 0, 0],
+                                [0, GA, 0],
+                                [0, 0, 2 * GA]])
+ElasticityBending = np.array([[EI, 0, 0],
+                              [0, EI, 0],
+                              [0, 0, 0.5 * EI]])
+
+
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
 Elasticity[3: 6, 3: 6] = ElasticityBending
@@ -63,17 +73,18 @@ for i in range(numberOfNodes):
     r2[i] = u[DOF * i + 1][0]
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
-max_load = 0.00000219
-LOAD_INCREMENTS = 60
+max_load = 100 * 1000
+LOAD_INCREMENTS = 200
 df = pd.DataFrame(columns=["load", "element", "v1", "v2", "v3", "k1", "k2", "k3"])
-fapp__ = np.linspace(0, max_load, LOAD_INCREMENTS)
-for load_iter_ in range(int(LOAD_INCREMENTS)):
-    print("--------------------------------------------------------------------------------------------------------------------------------------------------")
+fapp__ = np.hstack((np.linspace(0, max_load / 2, 50, endpoint=False), np.linspace(max_load / 2, max_load / 1.5, 200, endpoint=False), np.linspace(max_load / 1.5, max_load, 300)))
+print(fapp__)
+for load_iter_ in range(len(fapp__)):
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------", load_iter_)
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
         print(u[6 * vii + 3, 0] * 180 / np.pi)
-        #FG[-5, 0] = fapp__[load_iter_]
+        # FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
             xloc = node_data[n][:, None]
@@ -101,10 +112,8 @@ for load_iter_ in range(int(LOAD_INCREMENTS)):
 
                 v = Rot.T @ rds
                 gloc[0: 3] = Rot @ ElasticityExtension @ (v - np.array([0, 0, 1])[:, None])
-                major_kappa[3 * xgp + 3 * ngpt * elm: 3 * ngpt * elm + 3 * (xgp + 1)] += sol.get_incremental_k(dt, dtds, Rot)
-
                 kap = sol.get_incremental_k_path_independent(t, tds)
-                # gloc[3: 6] = Rot @ ElasticityBending @ major_kappa[3 * xgp + 3 * ngpt * elm : 3 * ngpt * elm + 3 * (xgp + 1)]
+                major_kappa[3 * elm: 3 * elm + 3] += sol.get_incremental_k(dt, dtds, Rot)
                 gloc[3: 6] = Rot @ ElasticityBending @ kap
                 pi = sol.get_pi(Rot)
                 # if elm == 6 and iter_ == 9:
@@ -124,23 +133,26 @@ for load_iter_ in range(int(LOAD_INCREMENTS)):
             FG[iv[:, None], 0] += floc
             KG[iv[:, None], iv] += kloc
         for ibc in range(6):
-            KG, FG = sol.impose_boundary_condition(KG, FG, ibc, 0)
+            sol.impose_boundary_condition(KG, FG, ibc, 0)
         du = -sol.get_displacement_vector(KG, FG)
         resn = np.linalg.norm(FG)
         # if resn > max_load * 1000000:
         #     FL = True
         #     print("BRK", fapp__[load_iter_])
         #     break
-        if np.isclose(resn, 0, atol=0.00000001):
+        if np.isclose(resn, 0, atol=0.001):
             break
+        deln = np.linalg.norm(du)
+        if deln > 1:
+            du = du / deln
 
         for i in range(numberOfNodes):
             xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(u[6 * i + 3: 6 * i + 6]), logg=True)
+            # xxx = sol.test_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(
+            #    u[6 * i + 3: 6 * i + 6]))
             u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
             u[6 * i + 0: 6 * i + 3] += du[6 * i + 0: 6 * i + 3]
 
-    if FL:
-        break
     r2 = u[DOF * vi + 1, 0]
     r3 = u[DOF * vi + 2, 0]
     ax.plot(r3, r2)

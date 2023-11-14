@@ -30,12 +30,11 @@ def impose_boundary_condition(k, f, ibc, bc):
     :param bc: boundary condition
     :return: stiffness matrix and force vector after imposing bc
     """
-    f = f - (k[:, ibc] * bc)[:, None]
+    f -= (k[:, ibc] * bc)[:, None]
     f[ibc] = bc
     k[:, ibc] = 0
     k[ibc, :] = 0
     k[ibc, ibc] = 1
-    return k, f
 
 
 def get_displacement_vector(k, f):
@@ -157,13 +156,12 @@ def get_theta_from_rotation(rmat, logg=False):
     #         y[i] = y[i] + 2 * np.pi * (np.pi - y[i]) / 2 / np.pi
     # return get_axial_tensor(y)
 
-def get_theta_from_rotation_depricated(rmat, logg=False):
+def get_theta_from_rotation_deprecated(rmat, logg=False):
     """
     Lie group log map
     :param rmat: rotation matrix
     :return: theta vector
     """
-    print("sdfsd", (np.trace(rmat) - 1) / 2)
     t = np.arccos((np.trace(rmat) - 1) / 2)
     if np.isclose(t, 0):
         return np.zeros((3, 3))
@@ -192,20 +190,17 @@ def get_axial_from_skew_symmetric_tensor(x):
     return np.array([x[2, 1], x[0, 2], x[1, 0]])
 
 
-def get_rotation_from_theta_tensor_depricated(x):
+def get_rotation_from_theta_tensor_deprecated(x):
     """
     :param x: theta vector
     :return: rotation tensor
     """
-    t = np.linalg.norm(x)
-
+    x = get_axial_tensor(x)
+    t = np.sqrt(0.5 * np.trace(x.T @ x))
     if np.isclose(t, 0):
         return np.eye(3)
-    x = x / t
-    print("sd", x)
-    x = get_axial_tensor(x)
-
-    return np.eye(3) + np.sin(t) + (1 - np.cos(t)) * x @ x
+    else:
+        return np.eye(3) + np.sin(t) / t * x + (1 - np.cos(t)) / t ** 2 * x @ x
 
 
 def get_rotation_from_theta_tensor(x):
@@ -335,9 +330,15 @@ def get_pi(rot):
     return pi
 
 
+def test_rotation(rmat):
+    y = (np.trace(rmat) - 1) / 2
+    t = np.arccos(y)
+    return get_axial_tensor(np.array([t, 0, 0]))
+
+
 if __name__ == "__main__":
     icon_m, i_m = get_connectivity_matrix(10, 1)
     # print(icon_m)
     # print(i_m)
-    b = get_incremental_k(np.array([1, 1, 1]), np.array([1, 1, 2]), np.eye(3))
-    print(b)
+    #b = get_incremental_k(np.array([1, 1, 1]), np.array([1, 1, 2]), np.eye(3))
+    # print(b)
