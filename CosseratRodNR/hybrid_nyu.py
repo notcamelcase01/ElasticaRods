@@ -2,10 +2,42 @@ import numpy as np
 import solver1d as sol
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import pandas as pd
+import matplotlib.animation as animation
+
+
+class ControlledAnimation:
+    def __init__(self, figc, animate, frames=100, interval=1, repeat=False):
+        self.figc = figc
+        self.animate = animate
+        self.frames = frames
+        self.interval = interval
+        self.repeat = repeat
+        self.ani = animation.FuncAnimation(self.figc, self.animate, frames=self.frames, interval=self.interval,
+                                           repeat=self.repeat)
+        self.pause_flag = True
+
+        self.cid = self.figc.canvas.mpl_connect('button_press_event', self.pause)
+    def start(self):
+        #FFwriter = animation.FFMpegWriter(fps=60)
+        #self.ani.save('input_follower.mp4', writer=FFwriter)
+        plt.show()
+
+    def stop(self):
+        self.ani.event_source.stop()
+
+    def pause(self, event):
+        self.pause_flag ^= True
+        if not self.pause_flag:
+            print("halted")
+            self.ani.event_source.stop()
+        else:
+            self.ani.event_source.start()
+
+    def disconnect(self):
+        self.figc.canvas.mpl_disconnect(self.cid)
+
 
 np.set_printoptions(linewidth=250)
-
 
 DIMENSIONS = 1
 DOF = 6
@@ -44,8 +76,11 @@ ElasticityExtension = np.array([[GA, 0, 0],
 ElasticityBending = np.array([[EI, 0, 0],
                               [0, EI, 0],
                               [0, 0, 0.5 * EI]])
-
-
+fig, ax = plt.subplots(1, 1, figsize=(9, 9))
+ax.set_xlim(0, L)
+"""
+Starting point
+"""
 Elasticity = np.zeros((6, 6))
 Elasticity[0: 3, 0: 3] = ElasticityExtension
 Elasticity[3: 6, 3: 6] = ElasticityBending
@@ -53,7 +88,7 @@ Elasticity[3: 6, 3: 6] = ElasticityBending
 # Elasticity[2, 2] = 10
 # Elasticity[5, 5] = 10
 vi = np.array([i for i in range(numberOfNodes)])
-vii = np.array([i for i in range(numberOfNodes) if i & 1 == 0])
+vii = np.array([i for i in range(numberOfNodes) if False or i & 1 == 0])
 FL = False
 """
 Starting point
@@ -61,10 +96,8 @@ Starting point
 resn = 0
 u *= 0
 u[6 * vi + 2, 0] = node_data
-u[6 * vi + 4, 0] = 0
+u[6 * vi + 3, 0] = 0
 # Thetas are zero
-#fig, (ax, ay) = plt.subplots(1, 2, figsize=(16, 9))
-fig, ax = plt.subplots(1, 1, figsize=(8, 8))
 
 r1 = np.zeros(numberOfNodes)
 r2 = np.zeros(numberOfNodes)
@@ -75,15 +108,21 @@ for i in range(numberOfNodes):
     r3[i] = u[DOF * i + 2][0]
 ax.plot(r3, r2, label="un-deformed", marker="o")
 max_load = 130 * 1000
-LOAD_INCREMENTS = 21
-df = pd.DataFrame(columns=["load", "element", "v1", "v2", "v3", "k1", "k2", "k3"])
+LOAD_INCREMENTS = 101
 fapp__ = np.linspace(0, max_load, LOAD_INCREMENTS)
-for load_iter_ in range(len(fapp__)):
-    print("--------------------------------------------------------------------------------------------------------------------------------------------------", load_iter_)
+
+
+def fea(load_iter_, is_halt=False):
+    global u
+    global du
+    du *= 0
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------", fapp__[load_iter_])
     for iter_ in range(MAX_ITER):
         KG, FG = sol.init_stiffness_force(numberOfNodes, DOF)
         FG[-6:-3] = sol.get_rotation_from_theta_tensor(u[-3:, 0]) @ np.array([0, fapp__[load_iter_], 0])[:, None]
-        print(u[6 * vii + 3, 0] * 180 / np.pi)
+
+        print(u[6 * vii + 2, 0])
+
         # FG[-5, 0] = fapp__[load_iter_]
         for elm in range(numberOfElements):
             n = icon[elm][1:]
@@ -101,14 +140,14 @@ for load_iter_ in range(len(fapp__)):
                 Nx_ = 1 / J * Bmat
                 r = rloc @ N_
                 t = tloc @ N_
-                dr = rloc @ N_
+                dr = drloc @ N_
                 dt = dtloc @ N_
                 tds = tloc @ Nx_
                 rds = rloc @ Nx_
                 drds = drloc @ Nx_
                 dtds = dtloc @ Nx_
 
-                Rot = sol.get_rotation_from_theta_tensor(t)
+                Rot = sol.get_rotation_from_theta_tensor(dt) @ sol.get_rotation_from_theta_tensor(t)
 
                 v = Rot.T @ rds
                 gloc[0: 3] = Rot @ ElasticityExtension @ (v - np.array([0, 0, 1])[:, None])
@@ -147,32 +186,64 @@ for load_iter_ in range(len(fapp__)):
             du = du / deln
 
         for i in range(numberOfNodes):
-            xxx = sol.get_theta_from_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(u[6 * i + 3: 6 * i + 6]), logg=True)
+            xxx = sol.get_theta_from_rotation(
+                sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(
+                    u[6 * i + 3: 6 * i + 6]), logg=True)
             # xxx = sol.test_rotation(sol.get_rotation_from_theta_tensor(du[6 * i + 3: 6 * i + 6]) @ sol.get_rotation_from_theta_tensor(
             #    u[6 * i + 3: 6 * i + 6]))
             u[6 * i + 3: 6 * i + 6, 0] = sol.get_axial_from_skew_symmetric_tensor(xxx)
             u[6 * i + 0: 6 * i + 3] += du[6 * i + 0: 6 * i + 3]
 
-    if True:
-        r2 = u[DOF * vi + 1, 0]
-        r3 = u[DOF * vi + 2, 0]
-        ax.text(r3[-5], r2[-5], "load : " + str(int(fapp__[load_iter_] / 1000)) + "k", bbox={'facecolor': 'white',
-                                                                                  'alpha': 0.6, 'pad': 2})
-        ax.plot(r3, r2, linewidth=3)
+    return is_halt
 
-        #ay.scatter(abs(fapp__[load_iter_]), r2[-1])
 
-r2 = u[DOF * vi + 1, 0]
-r3 = u[DOF * vi + 2, 0]
-ax.plot(r3, r2, marker="v")
-ax.text(r3[-5], r2[-5], "load : " + str(int(fapp__[-1] / 1000)) + "k", bbox={'facecolor': 'white',
-                                                                                     'alpha': 0.6, 'pad': 2})
-ax.legend()
-ax.set_xlabel(r"$r_3$", fontsize=35)
-ax.set_ylabel(r"$r_2$", fontsize=35)
+u = np.zeros((numberOfNodes * DOF, 1))
+u[6 * vi + 2, 0] = node_data
+
+
+marker_ = np.linspace(0, max_load, 51)
+
+
+xmax = 1e-7
+ymax = 1e-7
+xmin = 0
+ymin = 0
+
+def act(i):
+    global u
+    global halt
+    global xmax
+    global ymax
+    global xmin
+    global ymin
+    halt = fea(i)
+    if halt:
+        controlled_animation.stop()
+        return
+    # if i % 4 == 0:
+    if np.isclose(fapp__[i], marker_).any():
+        y = u[DOF * vi + 1, 0]
+        x = u[DOF * vi + 2, 0]
+        xmax, ymax = max(xmax, np.max(x)), max(np.max(y), ymax)
+        xmin, ymin = min(xmin, np.min(x)), min(np.min(y), ymin)
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+        line1.set_ydata(y)
+        line1.set_xdata(x)
+        # ax.text(x[-5], y[-5], "load : " + str(round(fapp__[i] / 1000, 2)) + "k",  bbox={'facecolor':'white',  'alpha':0.6, 'pad':2})
+        #ax.plot(x, y, linewidth=3)
+
+
+ax.set_xlabel(r"$r_3$", fontsize=30)
+ax.set_ylabel(r"$r_2$", fontsize=30)
 plt.xticks(fontsize=20)
 plt.yticks(fontsize=20)
-print(r2[-1], r3[-1], 1 + np.abs(fapp__[-1]) / (E0 * A), fapp__[-1] / (3 * E0 * i0))
-print(r2[-1], r3[-1])
-df.to_csv('strains.csv')
-plt.show()
+
+y = u[DOF * vi + 1, 0]
+x = u[DOF * vi + 2, 0]
+line1, = ax.plot(x, y)
+controlled_animation = ControlledAnimation(fig, act, frames=len(fapp__), repeat=False)
+controlled_animation.start()
+controlled_animation.disconnect()
+print(u[-6:, 0][1])

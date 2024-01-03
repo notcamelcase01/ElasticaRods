@@ -1,5 +1,7 @@
+from scipy.spatial.transform import Rotation as RotationHandle
 import numpy as np
 
+order = "xyz"
 
 def init_gauss_points(n=3):
     """
@@ -94,6 +96,12 @@ def init_stiffness_force(nnod, dof):
     :return: zero stiffness n force
     """
     return np.zeros((nnod * dof, nnod * dof)), np.zeros((nnod * dof, 1))
+
+
+def get_theta_from_rotation_de(rotation_matrix, logg=False):
+    r = RotationHandle.from_matrix(rotation_matrix)
+    x = r.as_euler(order, degrees=False)
+    return get_axial_tensor(x)
 
 
 def get_theta_from_rotation(rmat, logg=False):
@@ -222,6 +230,12 @@ def get_rotation_from_theta_tensor(x):
             [q[2] * q[1] + q[3] * q[0], q[0] ** 2 + q[2] ** 2 - 0.5, q[2] * q[3] - q[1] * q[0]],
             [q[3] * q[1] - q[2] * q[0], q[3] * q[2] + q[1] * q[0], q[0] ** 2 + q[3] ** 2 - 0.5]
         ])
+
+
+def get_rotation_from_theta_tensor_de(x):
+    x = np.reshape(x, (3,))
+    r = RotationHandle.from_euler(order, x, degrees=False)
+    return r.as_matrix()
 
 
 def get_assembly_vector(dof, n):
